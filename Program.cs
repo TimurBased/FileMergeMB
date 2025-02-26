@@ -13,55 +13,36 @@ using System.Windows.Threading;
 using System.Threading;
 
 
+
 namespace FileMerge
 {
     class Program
     {
         static void Main(string[] args)
         {
-            string templatePath = Path.GetFullPath("./Files/TemplateFile.docx");
-            string newDocFilePath = Path.GetFullPath("./Files/NewFile.docx");
-            string file1Path = Path.GetFullPath("./Files/File_1_testWithNumbering.docx");
-            string file2Path = Path.GetFullPath("./Files/File_2_testWithNumbering.docx");
+            string templatePath = Path.GetFullPath("./Files/NewFile Служебная записка1.docm");
+            string newDocFilePath = Path.GetFullPath("./Files/NewFile Служебная записка.docm");
 
-            // Вставляемые данные в таблицу
-            List<string[]> tableInsertingData= new List<string[]>{
-                new string[] { "Арискин Алексей Сергеевич", "Юридический департамент", "Согласовано c комментариями", "Комментарий123456" },
-                new string[] { "Сейфут Тимур Маратович", "Юридический департамент", "Согласовано", "" },
-                new string[] { "Ивановов Ивааааан Иванович", "Юридический департамент", "Согласовано c комментариями", "Комментарий123456 Комментарий123456 Комментарий123456 Комментарий123456" }
-                };
-            string url = "https://learn.javascript.ru/cookie";
             try
             {
                 
                 File.Delete(newDocFilePath);
                 File.Copy(templatePath, newDocFilePath, true);
 
-                var fileMap = new Dictionary<string, string>() { 
-                    { "<TagExplanatoryNote>", file1Path },
-                    { "<DesignSolutionTag>", file2Path }
-                };
-                // Вставка данных в шаблон
-                Console.WriteLine("0) " + System.GC.GetTotalMemory(true).ToString("000,000,000", Thread.CurrentThread.CurrentCulture));
-                Console.WriteLine("Start");
-                Console.WriteLine("1) " + System.GC.GetTotalMemory(true).ToString("000,000,000", Thread.CurrentThread.CurrentCulture));
                 using (WordprocessingDocument newDocFile = WordprocessingDocument.Open(newDocFilePath, true))
                 {
 
-                    InsertFileContentAt(newDocFile, fileMap);
-                    ReplacePlaceholders(newDocFile, "ToWho", "Наблюдательный совет НКО НКЦ(АО)");
-                    ReplacePlaceholders(newDocFile, "WhoQuestion", "О согласовании неаудиторских услуг");
-                    ReplacePlaceholders(newDocFile, "WhoSpeaker", "Коковин Сергей Игоревич");
-                    ReplacePlaceholders(newDocFile, "OnReview", "КА НКЦ 24.12.24");
-                    ReplacePlaceholders(newDocFile, "QuestName", "КА НКЦ 24.12.24");
-                    PlaceHyperLink(newDocFile, "QuestNameBM", url);
-                    GenerateAgreementTable(newDocFile, "<AgreementTableTag/>", "AgreementTableBM", tableInsertingData);
+                    ReplaceTextFromBookMark(newDocFile, "RegDataBM", "99.99.9999" + " ");
+                    ReplaceTextFromBookMark(newDocFile, "RegNumberBM", " " + "9999999999999");
+                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp1BM", "1 ШТАМП");
+                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp2BM", "2 ШТАМП");
+                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp21BM", "2.1 ШТАМП");
+                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp3BM", "3 ШТАМП");
+                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp4BM", "4 ШТАМП");
+                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp5BM", "5 ШТАМП");
                     newDocFile.MainDocumentPart.Document.Save();
 
                 }
-                Console.WriteLine("2) " + System.GC.GetTotalMemory(true).ToString("000,000,000", Thread.CurrentThread.CurrentCulture));
-                Console.WriteLine("End");
-                Console.WriteLine("3) " + System.GC.GetTotalMemory(true).ToString("000,000,000", Thread.CurrentThread.CurrentCulture));
 
                 Console.WriteLine("Данные успешно вставлены");
             }
@@ -70,6 +51,94 @@ namespace FileMerge
                 Console.WriteLine("Ошибка: " + ex.Message);
             }
             
+        }
+
+        private static void ReplaceTextFromBookMark(WordprocessingDocument mainDoc, string bookmarkName, string data)
+        {
+            var mainBody = mainDoc.MainDocumentPart.Document.Body;
+
+            var bookmarkStart = mainBody.Descendants<BookmarkStart>().FirstOrDefault(b => b.Name == bookmarkName);
+            var bookmarkEnd = mainBody.Descendants<BookmarkEnd>().FirstOrDefault(b => b.Id == bookmarkStart.Id);
+
+
+            var elementsToRemove = new List<OpenXmlElement>();
+
+            OpenXmlElement currentElement = bookmarkStart.NextSibling();
+            while (currentElement != null && !ReferenceEquals(currentElement, bookmarkEnd))
+            {
+                if (currentElement is Run run)
+                {
+                    elementsToRemove.Add(run); // Добавляем только элементы <w:r>
+                }
+                currentElement = currentElement.NextSibling();
+            }
+
+            // Удаляем все найденные элементы <w:r>
+            foreach (var element in elementsToRemove)
+            {
+                element.Remove();
+            }
+
+            // Создаем новый Run с данным текстом
+            var newRun = new Run(new RunProperties (new Text(data)
+            {
+                Space = SpaceProcessingModeValues.Preserve
+            }));
+
+            // Вставляем новый Run после начала закладки
+            bookmarkStart.Parent.InsertAfter(newRun, bookmarkStart);
+        }
+
+
+        private static void ReplaceTextFromBookMarkInTable(WordprocessingDocument mainDoc, string tableBookmarkName, string targetTableCell, string bookmarkName, string data)
+        {
+            var mainBody = mainDoc.MainDocumentPart.Document.Body;
+
+            // Шаг 1: Найти BookmarkStart для таблицы
+            var tableBookMark = mainBody.Descendants<BookmarkStart>()
+                .FirstOrDefault(b => b.Name == tableBookmarkName);
+
+            // Шаг 2: Найти таблицу, связанную с этим bookmark
+            var targetTable = tableBookMark.Ancestors<Table>().FirstOrDefault();
+
+            // Шаг 3: Найти целевую ячейку таблицы
+            var targetCell = targetTable.Descendants<TableCell>()
+                .FirstOrDefault(c => c.InnerText.Contains(targetTableCell));
+
+            // Шаг 4: Найти BookmarkStart с именем 'bookmarkName' внутри ячейки
+            var bookmarkStart = targetCell.Descendants<BookmarkStart>()
+                .FirstOrDefault(b => b.Name == bookmarkName);
+
+            // Шаг 5: Найти соответствующий BookmarkEnd
+            var bookmarkEnd = targetCell.Descendants<BookmarkEnd>()
+                .FirstOrDefault(b => b.Id == bookmarkStart.Id);
+
+            var elementsToRemove = new List<OpenXmlElement>();
+
+            OpenXmlElement currentElement = bookmarkStart.NextSibling();
+            while (currentElement != null && !ReferenceEquals(currentElement, bookmarkEnd))
+            {
+                if (currentElement is Run run)
+                {
+                    elementsToRemove.Add(run); // Добавляем только элементы <w:r>
+                }
+                currentElement = currentElement.NextSibling();
+            }
+
+            // Удаляем все найденные элементы <w:r>
+            foreach (var element in elementsToRemove)
+            {
+                element.Remove();
+            }
+
+            var newRun = new Run(
+                new Text(data + " ")
+                {
+                    Space = SpaceProcessingModeValues.Preserve // Сохраняем пробелы в тексте
+                });
+
+            bookmarkStart.Parent.InsertAfter(newRun, bookmarkStart);
+
         }
 
         private static void InsertFileContentAt(WordprocessingDocument mainDoc, Dictionary<string, string> fileMap)
@@ -229,9 +298,6 @@ namespace FileMerge
 
             parentParagraph.AppendChild(hyperlink);
         }
-
-
-
 
     }
 }
