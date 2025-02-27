@@ -6,11 +6,9 @@ using System.IO;
 using System.Collections.Generic;
 using System.Text;
 using DocumentFormat.OpenXml;
-using GemBox.Document.Tracking;
-using System.Reflection;
-using System.Security.Policy;
-using System.Windows.Threading;
-using System.Threading;
+using DocumentFormat.OpenXml.CustomProperties;
+using DocumentFormat.OpenXml.VariantTypes;
+
 
 
 
@@ -20,37 +18,98 @@ namespace FileMerge
     {
         static void Main(string[] args)
         {
-            string templatePath = Path.GetFullPath("./Files/NewFile Служебная записка1.docm");
+            string templatePath = Path.GetFullPath("./Files/Служебная записка.docm");
             string newDocFilePath = Path.GetFullPath("./Files/NewFile Служебная записка.docm");
 
             try
             {
-                
+
                 File.Delete(newDocFilePath);
                 File.Copy(templatePath, newDocFilePath, true);
 
                 using (WordprocessingDocument newDocFile = WordprocessingDocument.Open(newDocFilePath, true))
                 {
 
-                    ReplaceTextFromBookMark(newDocFile, "RegDataBM", "99.99.9999" + " ");
-                    ReplaceTextFromBookMark(newDocFile, "RegNumberBM", " " + "9999999999999");
-                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp1BM", "1 ШТАМП");
-                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp2BM", "2 ШТАМП");
-                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp21BM", "2.1 ШТАМП");
-                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp3BM", "3 ШТАМП");
-                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp4BM", "4 ШТАМП");
-                    ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp5BM", "5 ШТАМП");
+                    /* Inserting data with DocProperty */
+
+                    SetNewDataInDocProperty(newDocFile, "@RegData", "12.02.2004");
+                    SetNewDataInDocProperty(newDocFile, "@RegNumber", "Регистрационный номер 1231232131");
+                    /* Removing data*/
+
+                    //RemoveTextFromBookmark(newDocFile, "RegDataBM");
+                    //RemoveTextFromBookmark(newDocFile, "RegNumberBM");
+                    //RemoveTextFromBookmark(newDocFile, "Stamp1BM");
+                    //RemoveTextFromBookmark(newDocFile, "Stamp2BM");
+                    //RemoveTextFromBookmark(newDocFile, "Stamp21BM");
+                    //RemoveTextFromBookmark(newDocFile, "Stamp3BM");
+                    //RemoveTextFromBookmark(newDocFile, "Stamp4BM");
+                    //RemoveTextFromBookmark(newDocFile, "Stamp5BM");
+
+                    /* Inserting data*/
+
+                    //ReplaceTextFromBookMark(newDocFile, "RegDataBM", "99.99.9999" + " ");
+                    //ReplaceTextFromBookMark(newDocFile, "RegNumberBM", " " + "9999999999999");
+                    //ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp1BM", "1 ШТАМП");
+                    //ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp2BM", "2 ШТАМП");
+                    //ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp21BM", "2.1 ШТАМП");
+                    //ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp3BM", "3 ШТАМП");
+                    //ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp4BM", "4 ШТАМП");
+                    //ReplaceTextFromBookMarkInTable(newDocFile, "ShtampTableBM", "<TargetCell/>", "Stamp5BM", "5 ШТАМП");
+
+
                     newDocFile.MainDocumentPart.Document.Save();
 
                 }
 
-                Console.WriteLine("Данные успешно вставлены");
+                using (WordprocessingDocument newDocFile = WordprocessingDocument.Open(newDocFilePath, true))
+                {
+                    newDocFile.MainDocumentPart.Document.Save();
+                }
+
+                    Console.WriteLine("Данные успешно вставлены");
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Ошибка: " + ex.Message);
             }
-            
+
+        }
+
+
+        private static void SetNewDataInDocProperty(WordprocessingDocument mainDoc, string docPropertyName, string data)
+        {
+            var customPropsPart = mainDoc.CustomFilePropertiesPart;
+            var properties = customPropsPart.Properties;
+            foreach (var property in properties.Elements<CustomDocumentProperty>())
+            {
+                if (property.Name == docPropertyName)
+                {
+                    // Обновляем значение свойства
+                    property.Elements<VTLPWSTR>().First().Text = data;
+                    break;
+                }
+            }
+
+        }
+
+
+
+        private static void RemoveTextFromBookmark(WordprocessingDocument mainDoc, string bookmarkName)
+        {
+            var mainbody = mainDoc.MainDocumentPart.Document.Body;
+
+            var bookmarkStart = mainbody.Descendants<BookmarkStart>().FirstOrDefault(b => b.Name == bookmarkName);
+            var bookmarkEnd = mainbody.Descendants<BookmarkEnd>().FirstOrDefault(e => e.Id == bookmarkStart.Id);
+
+
+            var elementsToRemove = bookmarkStart.ElementsAfter()
+                                                .TakeWhile(e => e != bookmarkEnd)
+                                                .ToList(); 
+
+            foreach (var element in elementsToRemove)
+            {
+                element.Remove();
+            }
         }
 
         private static void ReplaceTextFromBookMark(WordprocessingDocument mainDoc, string bookmarkName, string data)
